@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "build": "tsc",
+    "build": "tsc && node -e \"const fs = require('fs'); const path = require('path'); fs.mkdirSync(path.join('dist', 'redis', 'scripts'), { recursive: true }); fs.copyFileSync(path.join('src', 'redis', 'scripts', 'reserveSlot.lua'), path.join('dist', 'redis', 'scripts', 'reserveSlot.lua'));\"",
     "start": "node dist/server.js",
     "worker": "ts-node-dev --respawn --transpile-only src/worker/index.ts",
     "lint": "eslint src --ext .ts",

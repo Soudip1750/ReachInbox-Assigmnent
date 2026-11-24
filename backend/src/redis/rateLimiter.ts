@@ -3,10 +3,61 @@ import * as path from 'path';
 import { redis } from './connection';
 import { logger } from '../config/logger';
 
-const luaScript = fs.readFileSync(
-  path.join(__dirname, 'scripts', 'reserveSlot.lua'),
-  'utf-8'
-);
+const FALLBACK_LUA_SCRIPT = `-- Reserve a slot for a sender respecting min-gap and hourly limit
+local now      = tonumber(ARGV[1])
+local minGap   = tonumber(ARGV[2])
+local limit    = tonumber(ARGV[3])
+local ns       = ARGV[4]
+local gapKey   = ns .. KEYS[1]
+
+-- Compute initial candidate slot
+local gapVal   = redis.call('GET', gapKey)
+local slot     = math.max(now, gapVal and tonumber(gapVal) or 0)
+local origHour = math.floor(slot / 3600000)
+local spilled  = 0
+
+-- Find a window with capacity
+for i = 0, 23 do
+  local window  = math.floor(slot / 3600000)
+  local cntKey  = ns .. KEYS[2] .. ':' .. window
+  local cnt     = tonumber(redis.call('GET', cntKey) or '0')
+  if cnt < limit then
+    -- Reserve in this window
+    redis.call('INCR', cntKey)
+    -- TTL: 2 hours + 10 min margin
+    redis.call('EXPIRE', cntKey, 7800)
+    break
+  end
+  -- Spill to next window boundary
+  slot     = (window + 1) * 3600000
+  spilled  = 1
+end
+
+-- Update gap key: next free slot = slot + minGap
+redis.call('SET', gapKey, slot + minGap, 'EX', 86400)
+
+local window = math.floor(slot / 3600000)
+return { slot, window, spilled }`;
+
+function loadLuaScript(): string {
+  const possiblePaths = [
+    path.join(__dirname, 'scripts', 'reserveSlot.lua'),
+    path.join(__dirname, '..', '..', 'src', 'redis', 'scripts', 'reserveSlot.lua'),
+    path.join(process.cwd(), 'src', 'redis', 'scripts', 'reserveSlot.lua'),
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      try {
+        return fs.readFileSync(p, 'utf-8');
+      } catch {
+        // Continue to next path
+      }
+    }
+  }
+  return FALLBACK_LUA_SCRIPT;
+}
+
+const luaScript = loadLuaScript();
 
 const NS = 'ri:';
 
