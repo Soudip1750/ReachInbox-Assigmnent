@@ -13,8 +13,8 @@ async function main() {
   await connectDB();
   await connectRedis();
 
-  // Provision senders and ES index
-  await provisionSenders();
+  // Provision senders and ES index (non-fatal — server starts even if these fail)
+  await provisionSenders().catch((err) => logger.warn({ err }, 'Sender provisioning failed (non-fatal)'));
   await ensureIndex();
 
   // Boot reconciler (one-shot, not a scheduler)

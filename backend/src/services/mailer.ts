@@ -136,17 +136,36 @@ export async function provisionSenders(): Promise<void> {
   logger.info({ needed }, 'Provisioning Ethereal senders');
 
   for (let i = 0; i < needed; i++) {
-    const account = await nodemailer.createTestAccount();
-    await prisma.sender.create({
-      data: {
-        email: account.user,
-        smtpHost: account.smtp.host,
-        smtpPort: account.smtp.port,
-        smtpUser: account.user,
-        smtpPassEnc: encrypt(account.pass),
-        active: true,
-      },
-    });
-    logger.info({ email: account.user }, 'Provisioned Ethereal sender');
+    // Retry up to 3 times in case Ethereal returns a duplicate email
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const account = await nodemailer.createTestAccount();
+        await prisma.sender.upsert({
+          where: { email: account.user },
+          update: {
+            smtpHost: account.smtp.host,
+            smtpPort: account.smtp.port,
+            smtpUser: account.user,
+            smtpPassEnc: encrypt(account.pass),
+            active: true,
+          },
+          create: {
+            email: account.user,
+            smtpHost: account.smtp.host,
+            smtpPort: account.smtp.port,
+            smtpUser: account.user,
+            smtpPassEnc: encrypt(account.pass),
+            active: true,
+          },
+        });
+        logger.info({ email: account.user }, 'Provisioned Ethereal sender');
+        break;
+      } catch (err) {
+        logger.warn({ err, attempt }, 'Sender provisioning attempt failed, retrying');
+        if (attempt === 2) {
+          logger.error({ err }, 'Failed to provision sender after 3 attempts, skipping');
+        }
+      }
+    }
   }
 }
