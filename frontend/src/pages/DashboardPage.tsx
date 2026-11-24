@@ -181,7 +181,7 @@ export function DashboardPage() {
           {/* Quick link to BullMQ Admin Dashboard */}
           <div className="pt-4 border-t border-gray-100">
             <a
-              href="http://localhost:4000/admin/queues"
+              href={`${import.meta.env['VITE_BACKEND_URL'] ?? 'http://localhost:4000'}/admin/queues`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-between text-xs text-gray-500 hover:text-emerald-700 py-1 transition-colors"
