@@ -15,7 +15,9 @@ export function LoginPage() {
 
   // Redirect if already logged in
   useEffect(() => {
-    if (user) navigate('/dashboard', { replace: true });
+    if (user && typeof user === 'object' && 'id' in user) {
+      navigate('/dashboard', { replace: true });
+    }
   }, [user, navigate]);
 
   // Handle error from OAuth callback

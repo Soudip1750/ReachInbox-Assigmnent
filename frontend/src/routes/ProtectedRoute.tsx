@@ -17,7 +17,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  if (isError || !user) {
+  const isValidUser = Boolean(user && typeof user === 'object' && 'id' in user);
+
+  if (isError || !isValidUser) {
     return <Navigate to="/login" replace />;
   }
 
