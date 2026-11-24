@@ -1,0 +1,111 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  googleId  String   @unique @map("google_id")
+  email     String   @unique
+  name      String
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  campaigns       Campaign[]
+  emailJobs       EmailJob[]
+  slackConnection SlackConnection?
+
+  @@map("users")
+}
+
+model SlackConnection {
+  id              String    @id @default(uuid())
+  userId          String    @unique @map("user_id")
+  teamId          String    @map("team_id")
+  teamName        String    @map("team_name")
+  channelId       String?   @map("channel_id")
+  webhookUrlEnc   String?   @map("webhook_url_enc")
+  accessTokenEnc  String?   @map("access_token_enc")
+  connectedAt     DateTime  @default(now()) @map("connected_at")
+  revokedAt       DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("slack_connections")
+}
+
+model Sender {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  smtpHost    String   @map("smtp_host")
+  smtpPort    Int      @map("smtp_port")
+  smtpUser    String   @map("smtp_user")
+  smtpPassEnc String   @map("smtp_pass_enc")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  emailJobs EmailJob[]
+
+  @@map("senders")
+}
+
+model Campaign {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  subject     String
+  body        String
+  startTime   DateTime @map("start_time")
+  delayMs     Int      @map("delay_ms")
+  hourlyLimit Int      @map("hourly_limit")
+  totalLeads  Int      @map("total_leads")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailJobs EmailJob[]
+
+  @@map("campaigns")
+}
+
+enum EmailStatus {
+  SCHEDULED
+  PROCESSING
+  SENT
+  FAILED
+}
+
+model EmailJob {
+  id            String      @id @default(uuid())
+  campaignId    String      @map("campaign_id")
+  userId        String      @map("user_id")
+  senderId      String      @map("sender_id")
+  recipientEmail String     @map("recipient_email")
+  subject       String
+  body          String
+  status        EmailStatus @default(SCHEDULED)
+  scheduledAt   DateTime    @map("scheduled_at")
+  nextRunAt     DateTime    @map("next_run_at")
+  attempts      Int         @default(0)
+  claimedAt     DateTime?   @map("claimed_at")
+  sentAt        DateTime?   @map("sent_at")
+  smtpMessageId String?     @map("smtp_message_id")
+  previewUrl    String?     @map("preview_url")
+  errorMessage  String?     @map("error_message")
+  enqueued      Boolean     @default(false)
+  esIndexed     Boolean     @default(false) @map("es_indexed")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sender   Sender   @relation(fields: [senderId], references: [id])
+
+  @@unique([campaignId, recipientEmail])
+  @@index([userId, status, scheduledAt])
+  @@index([status, nextRunAt])
+  @@map("email_jobs")
+}
