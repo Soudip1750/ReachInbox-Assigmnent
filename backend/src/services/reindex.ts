@@ -22,7 +22,9 @@ async function main() {
       status: r.status,
       senderEmail: r.sender.email,
       scheduledAt: r.scheduledAt.toISOString(),
+      nextRunAt: r.nextRunAt.toISOString(),
       sentAt: r.sentAt?.toISOString() ?? null,
+      previewUrl: r.previewUrl ?? null,
       error: r.errorMessage ?? null,
     }));
   });

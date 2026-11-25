@@ -7,8 +7,16 @@ import { logger } from '../../config/logger';
 import { env } from '../../config/env';
 import { enqueueEmailJobsBulk } from '../../queue/emailQueue';
 import { indexEmail } from '../../services/search';
+import { MAX_ATTACHMENT_BYTES, saveCampaignAttachments } from '../../services/attachments';
 
 export const campaignsRouter = Router();
+
+const attachmentSchema = z.object({
+  filename: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(150).default('application/octet-stream'),
+  size: z.number().int().min(1).max(MAX_ATTACHMENT_BYTES),
+  contentBase64: z.string().min(1).max(7_200_000),
+});
 
 const campaignSchema = z.object({
   subject: z.string().min(1).max(200),
@@ -17,11 +25,12 @@ const campaignSchema = z.object({
   startTime: z.string().datetime({ offset: true }),
   delayMs: z.number().int().min(0),
   hourlyLimit: z.number().int().min(1).max(env.MAX_EMAILS_PER_HOUR_PER_SENDER),
+  attachments: z.array(attachmentSchema).max(10).optional(),
 });
 
 // POST /api/campaigns
 campaignsRouter.post('/', requireAuth, validate(campaignSchema), async (req, res) => {
-  const { subject, body, emails, startTime, delayMs, hourlyLimit } = req.body as z.infer<typeof campaignSchema>;
+  const { subject, body, emails, startTime, delayMs, hourlyLimit, attachments } = req.body as z.infer<typeof campaignSchema>;
   const userId = req.user!.userId;
 
   try {
@@ -90,6 +99,10 @@ campaignsRouter.post('/', requireAuth, validate(campaignSchema), async (req, res
 
       return { campaign, jobIds };
     });
+
+    if (attachments && attachments.length > 0) {
+      await saveCampaignAttachments(campaign.id, attachments);
+    }
 
     // Enqueue outside the transaction
     const queueJobs = uniqueEmails.map((_, i) => ({

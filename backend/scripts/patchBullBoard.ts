@@ -12,6 +12,7 @@ export function patchBullBoardTheme(): void {
     // Strip any old patch if present
     html = html.replace(/<style id="bull-board-custom-fix">[\s\S]*?<\/style>/g, '');
     html = html.replace(/<link rel="preconnect" href="https:\/\/fonts\.gstatic\.com" crossorigin>[\s\S]*?<\/style>/g, '');
+    html = html.replace(/<script id="bull-board-admin-logout">[\s\S]*?<\/script>/g, '');
 
     const customStyle = `<link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -209,7 +210,11 @@ export function patchBullBoardTheme(): void {
       a[title*="waiting-children"],
       button[title*="Waiting Children"],
       [class*="xvoGoH"],
-      .xvoGoH {
+      .xvoGoH,
+      /* Remove Bull Board version link (e.g. 5.23.0) */
+      a[href*="bull-board/releases"],
+      a.LzWgje,
+      [class*="LzWgje"] {
         display: none !important;
       }
 
@@ -303,7 +308,75 @@ export function patchBullBoardTheme(): void {
       .cdc4_x:hover {
         background-color: #00924d !important;
       }
-    </style></head>`;
+
+      #bullboard-logout-section {
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e2e8f0;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      #bullboard-logout-btn {
+        background-color: #ef4444;
+        color: #ffffff;
+        border: none;
+        border-radius: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+      }
+
+      #bullboard-logout-btn:hover {
+        background-color: #dc2626;
+      }
+    </style>
+    <script id="bull-board-admin-logout">
+      (function () {
+        function injectLogoutButton() {
+          var anchor = document.getElementById('jobs-per-page') || document.getElementById('language');
+          if (!anchor) return;
+          var formContainer = anchor.closest('form') || anchor.parentElement?.parentElement;
+          if (!formContainer || document.getElementById('bullboard-logout-section')) return;
+
+          var wrapper = document.createElement('div');
+          wrapper.id = 'bullboard-logout-section';
+
+          var btn = document.createElement('button');
+          btn.id = 'bullboard-logout-btn';
+          btn.type = 'button';
+          btn.textContent = 'Logout';
+          btn.addEventListener('click', function () {
+            btn.disabled = true;
+            btn.textContent = 'Logging out...';
+            fetch('/admin/logout', { method: 'POST', credentials: 'include' })
+              .then(function (r) { return r.json(); })
+              .then(function (data) {
+                window.location.href = (data && data.loginUrl) ? data.loginUrl : 'http://localhost:5173/login';
+              })
+              .catch(function () {
+                window.location.href = 'http://localhost:5173/login';
+              });
+          });
+
+          wrapper.appendChild(btn);
+          formContainer.appendChild(wrapper);
+        }
+
+        var observer = new MutationObserver(injectLogoutButton);
+        if (document.body) {
+          observer.observe(document.body, { childList: true, subtree: true });
+          injectLogoutButton();
+        } else {
+          document.addEventListener('DOMContentLoaded', function () {
+            observer.observe(document.body, { childList: true, subtree: true });
+            injectLogoutButton();
+          });
+        }
+      })();
+    </script></head>`;
 
     html = html.replace('</head>', customStyle);
     fs.writeFileSync(targetPath, html, 'utf8');

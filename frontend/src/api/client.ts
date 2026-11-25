@@ -47,7 +47,7 @@ export const emailsApi = {
 
   search: (params: { q?: string; status?: string; page?: number; pageSize?: number }) =>
     apiClient
-      .get<{ items: EmailJob[]; total: number }>('/api/emails/search', { params })
+      .get<PaginatedResponse<EmailJob>>('/api/emails/search', { params })
       .then((r) => r.data),
 
   stats: () => apiClient.get<EmailStats>('/api/emails/stats').then((r) => r.data),
@@ -64,6 +64,13 @@ export const slackApi = {
   status: () => apiClient.get<SlackStatus>('/api/slack/status').then((r) => r.data),
   connectUrl: () => `${BACKEND_URL}/auth/slack`,
   disconnect: () => apiClient.delete('/api/slack').then((r) => r.data),
+};
+
+// --- Admin ---
+export const adminApi = {
+  login: (data: { email: string; password: string }) =>
+    apiClient.post<{ ok: boolean; redirectUrl: string }>('/admin/login', data).then((r) => r.data),
+  queuesUrl: () => `${BACKEND_URL}/admin/queues`,
 };
 
 // --- Error helper ---

@@ -25,22 +25,24 @@ export function useLogout() {
 
 // --- Email hooks ---
 export function useScheduledEmails(page = 1, search?: string) {
+  const trimmed = search?.trim();
   return useQuery({
-    queryKey: ['emails', 'scheduled', page, search],
+    queryKey: ['emails', 'scheduled', page, trimmed || ''],
     queryFn: () =>
-      search
-        ? emailsApi.search({ q: search, status: 'scheduled', page })
+      trimmed
+        ? emailsApi.search({ q: trimmed, status: 'scheduled', page })
         : emailsApi.list({ status: 'scheduled', page }),
     refetchInterval: 10_000,
   });
 }
 
 export function useSentEmails(page = 1, search?: string) {
+  const trimmed = search?.trim();
   return useQuery({
-    queryKey: ['emails', 'sent', page, search],
+    queryKey: ['emails', 'sent', page, trimmed || ''],
     queryFn: () =>
-      search
-        ? emailsApi.search({ q: search, status: 'sent', page })
+      trimmed
+        ? emailsApi.search({ q: trimmed, status: 'sent', page })
         : emailsApi.list({ status: 'sent', page }),
     refetchInterval: 10_000,
   });

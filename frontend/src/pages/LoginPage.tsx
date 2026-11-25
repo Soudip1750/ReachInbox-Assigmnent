@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../api/hooks';
-import { authApi } from '../api/client';
+import { adminApi, authApi, getApiErrorMessage } from '../api/client';
 import { Spinner } from '../components/ui/Spinner';
 
 export function LoginPage() {
@@ -12,6 +12,11 @@ export function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [adminSubmitting, setAdminSubmitting] = useState(false);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -48,8 +53,48 @@ export function LoginPage() {
     });
   };
 
+  const handleOpenAdminModal = () => {
+    setAdminError(null);
+    setAdminEmail('');
+    setAdminPassword('');
+    setAdminModalOpen(true);
+  };
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminError(null);
+    setAdminSubmitting(true);
+    try {
+      await adminApi.login({ email: adminEmail.trim(), password: adminPassword });
+      setAdminModalOpen(false);
+      const url = adminApi.queuesUrl();
+      const win = window.open(url, '_blank', 'noopener,noreferrer');
+      if (!win) {
+        window.location.href = url;
+      }
+    } catch (err) {
+      const msg = getApiErrorMessage(err);
+      setAdminError(msg);
+      toast.error(msg);
+    } finally {
+      setAdminSubmitting(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen w-full bg-white flex items-center justify-center p-4">
+    <div className="relative min-h-screen w-full bg-white flex items-center justify-center p-4">
+      {/* Top-right BullMQ Queue Status Admin Button */}
+      <button
+        type="button"
+        onClick={handleOpenAdminModal}
+        className="absolute top-5 right-6 flex items-center gap-2 px-3.5 py-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-600 hover:text-[#00a859] shadow-sm transition-colors"
+      >
+        <span>BullMQ Queue Status</span>
+        <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono">
+          :4000 ↗
+        </span>
+      </button>
+
       <div className="w-full max-w-md bg-white border border-gray-100 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] p-8 sm:p-10">
         <h1 className="text-2xl font-bold text-gray-900 text-center mb-6">Login</h1>
 
@@ -105,6 +150,78 @@ export function LoginPage() {
             </button>
           </form>
         </div>
+
+        {/* Admin Login Modal for BullMQ Queue Dashboard */}
+        {adminModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-gray-900">Admin Queue Access</h2>
+                <button
+                  type="button"
+                  onClick={() => setAdminModalOpen(false)}
+                  aria-label="Close admin modal"
+                  className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-4">
+                Sign in with admin credentials to open the BullMQ Queue Dashboard.
+              </p>
+
+              <form onSubmit={handleAdminLogin} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Admin Email
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="admin@gmail.com"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    className="w-full bg-[#f4f6f8] text-gray-800 placeholder-gray-400 text-sm px-3.5 py-2.5 rounded-xl border border-transparent focus:border-[#00a859] focus:bg-white focus:outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter admin password"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    className="w-full bg-[#f4f6f8] text-gray-800 placeholder-gray-400 text-sm px-3.5 py-2.5 rounded-xl border border-transparent focus:border-[#00a859] focus:bg-white focus:outline-none transition-all"
+                  />
+                </div>
+
+                {adminError && (
+                  <p className="text-xs text-red-600 font-medium">{adminError}</p>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdminModalOpen(false)}
+                    className="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={adminSubmitting}
+                    className="px-4 py-2 bg-[#00a859] hover:bg-[#00924d] disabled:opacity-60 text-white text-xs font-semibold rounded-xl transition-colors shadow-sm"
+                  >
+                    {adminSubmitting ? 'Verifying...' : 'Open Queue Dashboard'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
 }

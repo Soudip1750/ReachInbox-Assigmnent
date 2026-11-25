@@ -34,16 +34,57 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 }
 
+export interface AdminJwtPayload {
+  role: 'admin';
+  email: string;
+}
+
+export function issueAdminJwt(email: string): string {
+  return jwt.sign({ role: 'admin', email } satisfies AdminJwtPayload, env.JWT_SECRET, {
+    expiresIn: '1d',
+  });
+}
+
+export function setAdminCookie(res: Response, token: string): void {
+  res.cookie('admin_token', token, {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 24 * 60 * 60 * 1000, // 1 day
+  });
+}
+
+export function clearAdminCookie(res: Response): void {
+  res.clearCookie('admin_token', {
+    httpOnly: true,
+    secure: env.NODE_ENV === 'production',
+    sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax',
+  });
+}
+
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  // In development, if user accesses admin queues directly, allow or auto-authenticate
-  if (env.NODE_ENV !== 'production' && !req.cookies?.['auth_token']) {
-    req.user = { userId: 'dev-admin-id', email: 'admin@reachinbox.local' };
-    next();
-    return;
+  const adminToken = req.cookies?.['admin_token'] as string | undefined;
+  if (adminToken) {
+    try {
+      const payload = jwt.verify(adminToken, env.JWT_SECRET) as AdminJwtPayload;
+      if (
+        payload.role === 'admin' &&
+        payload.email.toLowerCase() === env.ADMIN_EMAIL.trim().toLowerCase()
+      ) {
+        req.user = { userId: 'admin', email: payload.email };
+        next();
+        return;
+      }
+    } catch (err) {
+      logger.debug({ err }, 'Admin JWT verification failed');
+    }
   }
+
   requireAuth(req, res, () => {
-    const adminEmails = env.ADMIN_EMAILS.split(',').map((e) => e.trim()).filter(Boolean);
-    if (adminEmails.length === 0 || adminEmails.includes(req.user!.email)) {
+    const adminEmails = env.ADMIN_EMAILS.split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (adminEmails.includes(req.user!.email.toLowerCase())) {
       next();
     } else {
       res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Admin access required' } });

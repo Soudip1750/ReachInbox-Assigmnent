@@ -4,6 +4,28 @@ import { useCreateCampaign, useAuth } from '../../api/hooks';
 import { getApiErrorMessage } from '../../api/client';
 import { parseEmailFile } from '../../lib/csv';
 import { toLocalISOString } from '../../lib/date';
+import type { CampaignAttachment } from '../../types';
+
+const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024; // 5 MB
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const commaIdx = result.indexOf(',');
+      resolve(commaIdx >= 0 ? result.slice(commaIdx + 1) : result);
+    };
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
 
 interface ComposeViewProps {
   isOpen: boolean;
@@ -23,10 +45,12 @@ export function ComposeModal({ isOpen, onClose }: ComposeViewProps) {
   const [scheduledTime, setScheduledTime] = useState(
     toLocalISOString(new Date(Date.now() + 60_000))
   );
+  const [attachments, setAttachments] = useState<CampaignAttachment[]>([]);
 
   const [isSendLaterOpen, setIsSendLaterOpen] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
 
@@ -42,6 +66,42 @@ export function ComposeModal({ isOpen, onClose }: ComposeViewProps) {
 
     setEmailsList((prev) => [...new Set([...prev, ...result.emails])]);
     toast.success(`${result.emails.length} email addresses added from ${file.name}`);
+  };
+
+  const handleAttachmentSelect = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const added: CampaignAttachment[] = [];
+    for (const file of Array.from(files)) {
+      if (file.size === 0) {
+        toast.error(`${file.name} is empty.`);
+        continue;
+      }
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        toast.error(`${file.name} exceeds the 5 MB limit.`);
+        continue;
+      }
+      try {
+        const contentBase64 = await readFileAsBase64(file);
+        added.push({
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
+          size: file.size,
+          contentBase64,
+        });
+      } catch {
+        toast.error(`Failed to attach ${file.name}.`);
+      }
+    }
+
+    if (added.length > 0) {
+      setAttachments((prev) => {
+        const existingNames = new Set(prev.map((a) => a.filename));
+        const uniqueNew = added.filter((a) => !existingNames.has(a.filename));
+        return [...prev, ...uniqueNew];
+      });
+      toast.success(`${added.length} file${added.length > 1 ? 's' : ''} attached.`);
+    }
   };
 
   const handleManualAddEmail = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -84,6 +144,7 @@ export function ComposeModal({ isOpen, onClose }: ComposeViewProps) {
         startTime: startTimeISO,
         delayMs: delaySec * 1000,
         hourlyLimit,
+        ...(attachments.length > 0 ? { attachments } : {}),
       });
 
       toast.success(`✅ Campaign scheduled! ${res.total} emails queued.`);
@@ -123,41 +184,46 @@ export function ComposeModal({ isOpen, onClose }: ComposeViewProps) {
 
           {/* Right Header Controls */}
           <div className="flex items-center gap-4 relative">
+            <input
+              ref={attachmentInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                handleAttachmentSelect(e.target.files);
+                e.target.value = '';
+              }}
+            />
             <button
               type="button"
+              onClick={() => attachmentInputRef.current?.click()}
               className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full transition-colors relative"
-              title="Attachments"
+              title="Attach file (max 5 MB)"
+              aria-label="Attach file"
             >
               <svg className="w-5 h-5 text-[#00a859]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
               </svg>
+              {attachments.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-[#00a859] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                  {attachments.length}
+                </span>
+              )}
             </button>
 
-            <button
-              type="button"
-              onClick={() => setIsSendLaterOpen(!isSendLaterOpen)}
-              className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full transition-colors"
-              title="Schedule Time"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" strokeWidth="1.8" />
-                <polyline points="12 6 12 12 16 14" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            </button>
-
-            {/* Send Later pill button */}
+            {/* Schedule Later pill button */}
             <button
               type="button"
               onClick={() => setIsSendLaterOpen(!isSendLaterOpen)}
               className="px-5 py-1.5 rounded-full border border-[#00a859] text-[#00a859] hover:bg-[#e8f5e9] text-sm font-medium transition-all"
             >
-              Send Later
+              Schedule Later
             </button>
 
-            {/* Figma Send Later Popover (Screen 5) */}
+            {/* Schedule Later Popover */}
             {isSendLaterOpen && (
               <div className="absolute right-0 top-12 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-5 z-50 animate-slide-up">
-                <h3 className="text-sm font-bold text-gray-900 mb-3">Send Later</h3>
+                <h3 className="text-sm font-bold text-gray-900 mb-3">Schedule Later</h3>
 
                 <div className="mb-4">
                   <label className="block text-xs text-gray-500 mb-1">Pick date & time</label>
@@ -365,6 +431,32 @@ export function ComposeModal({ isOpen, onClose }: ComposeViewProps) {
             onChange={(e) => setBody(e.target.value)}
             className="flex-1 w-full resize-none p-4 text-sm text-gray-800 placeholder-gray-300 focus:outline-none bg-transparent"
           />
+
+          {/* Attached Files List */}
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
+              <span className="text-xs text-gray-400 font-medium mr-1">Attachments:</span>
+              {attachments.map((file) => (
+                <span
+                  key={file.filename}
+                  className="inline-flex items-center gap-1.5 bg-[#f4f6f8] border border-gray-200 text-gray-700 text-xs px-3 py-1 rounded-full"
+                >
+                  <span className="truncate max-w-[180px] font-medium">{file.filename}</span>
+                  <span className="text-[10px] text-gray-400">({formatFileSize(file.size)})</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAttachments((prev) => prev.filter((a) => a.filename !== file.filename))
+                    }
+                    aria-label={`Remove ${file.filename}`}
+                    className="text-gray-400 hover:text-red-500 ml-0.5"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Bottom Send / Schedule Bar */}
           <div className="flex items-center justify-between pt-4 border-t border-gray-100">

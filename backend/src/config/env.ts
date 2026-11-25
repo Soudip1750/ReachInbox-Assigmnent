@@ -23,6 +23,8 @@ const envSchema = z.object({
   SLACK_REDIRECT_URI: z.string().default(''),
 
   ADMIN_EMAILS: z.string().default(''),
+  ADMIN_EMAIL: z.string().email().default('admin@gmail.com'),
+  ADMIN_PASSWORD: z.string().min(1).default('admin123'),
 
   SENDER_COUNT: z.coerce.number().min(1).default(3),
   SMTP_MODE: z.enum(['ethereal', 'stub']).default('ethereal'),

@@ -43,6 +43,7 @@ interface SendEmailOptions {
   subject: string;
   body: string;
   messageId: string;
+  attachments?: Array<{ filename: string; path: string; contentType?: string }>;
 }
 
 interface SendEmailResult {
@@ -83,7 +84,7 @@ export function getStubCallCount() { return stubCallCount; }
 export function resetStubCallCount() { stubCallCount = 0; }
 
 export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult> {
-  const { sender, to, subject, body, messageId } = opts;
+  const { sender, to, subject, body, messageId, attachments } = opts;
 
   if (env.SMTP_MODE === 'stub') {
     stubCallCount++;
@@ -102,6 +103,7 @@ export async function sendEmail(opts: SendEmailOptions): Promise<SendEmailResult
       to,
       subject,
       text: body,
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
       headers: {
         'Message-ID': `<${messageId}@reachinbox.local>`,
       },

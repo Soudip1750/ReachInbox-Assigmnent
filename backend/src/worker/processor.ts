@@ -2,6 +2,7 @@ import { Worker, Job, DelayedError } from 'bullmq';
 import { workerRedis } from '../redis/connection';
 import { prisma } from '../db/prisma';
 import { sendEmail, getSenderTransport, TransientError, PermanentError } from '../services/mailer';
+import { loadCampaignAttachments } from '../services/attachments';
 import { reserveSlot, incrSent } from '../redis/rateLimiter';
 import { indexEmail } from '../services/search';
 import { notifyRateLimitHit } from '../services/slack';
@@ -88,12 +89,14 @@ export function createEmailWorker(): Worker<EmailJobData> {
       try {
         await job.updateProgress(25);
 
+        const attachments = await loadCampaignAttachments(row.campaignId);
         const { previewUrl } = await sendEmail({
           sender: row.sender,
           to: row.recipientEmail,
           subject: row.subject,
           body: row.body,
           messageId,
+          attachments,
         });
 
         await job.updateProgress(75);
@@ -135,7 +138,9 @@ export function createEmailWorker(): Worker<EmailJobData> {
           status: 'SENT',
           senderEmail: row.sender.email,
           scheduledAt: row.scheduledAt.toISOString(),
+          nextRunAt: row.nextRunAt.toISOString(),
           sentAt: new Date().toISOString(),
+          previewUrl: previewUrl ?? null,
           error: null,
         });
 

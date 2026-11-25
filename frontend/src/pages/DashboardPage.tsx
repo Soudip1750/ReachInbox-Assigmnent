@@ -177,21 +177,6 @@ export function DashboardPage() {
               </nav>
             </div>
           </div>
-
-          {/* Quick link to BullMQ Admin Dashboard */}
-          <div className="pt-4 border-t border-gray-100">
-            <a
-              href={`${import.meta.env['VITE_BACKEND_URL'] ?? 'http://localhost:4000'}/admin/queues`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between text-xs text-gray-500 hover:text-emerald-700 py-1 transition-colors"
-            >
-              <span>BullMQ Queue Status</span>
-              <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono">
-                :4000 ↗
-              </span>
-            </a>
-          </div>
         </aside>
 
         {/* Right Main Content Area */}

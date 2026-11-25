@@ -40,6 +40,13 @@ export interface EmailStats {
   total: number;
 }
 
+export interface CampaignAttachment {
+  filename: string;
+  contentType: string;
+  size: number;
+  contentBase64: string;
+}
+
 export interface CampaignRequest {
   subject: string;
   body: string;
@@ -47,6 +54,7 @@ export interface CampaignRequest {
   startTime: string;
   delayMs: number;
   hourlyLimit: number;
+  attachments?: CampaignAttachment[];
 }
 
 export interface CampaignResponse {

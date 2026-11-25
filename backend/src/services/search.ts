@@ -55,8 +55,18 @@ export interface EmailDoc {
   status: string;
   senderEmail: string;
   scheduledAt: string | null;
+  nextRunAt?: string | null;
   sentAt: string | null;
+  previewUrl?: string | null;
   error: string | null;
+}
+
+export function resolveStatusFilter(status?: string): string[] | undefined {
+  if (!status || !status.trim()) return undefined;
+  const normalized = status.trim().toLowerCase();
+  if (normalized === 'scheduled') return ['SCHEDULED', 'PROCESSING'];
+  if (normalized === 'sent') return ['SENT', 'FAILED'];
+  return [status.trim().toUpperCase()];
 }
 
 export async function indexEmail(doc: EmailDoc): Promise<boolean> {
@@ -85,16 +95,49 @@ export async function searchEmails(opts: {
 
   const must: object[] = [{ term: { userId } }];
 
-  if (status) {
-    must.push({ term: { status: status.toUpperCase() } });
+  const statuses = resolveStatusFilter(status);
+  if (statuses) {
+    must.push({ terms: { status: statuses } });
   }
 
-  if (q && q.trim()) {
+  const trimmedQ = q?.trim();
+  if (trimmedQ) {
+    const escapedWildcard = trimmedQ.replace(/[\\*?]/g, '\\$&');
     must.push({
-      multi_match: {
-        query: q.trim(),
-        fields: ['recipient^2', 'subject^2', 'body'],
-        fuzziness: 'AUTO',
+      bool: {
+        should: [
+          {
+            multi_match: {
+              query: trimmedQ,
+              fields: ['recipient^2', 'subject^2', 'body'],
+              fuzziness: 'AUTO',
+            },
+          },
+          {
+            multi_match: {
+              query: trimmedQ,
+              fields: ['recipient^2', 'subject^2', 'body'],
+              type: 'phrase_prefix',
+            },
+          },
+          {
+            wildcard: {
+              'recipient.keyword': {
+                value: `*${escapedWildcard}*`,
+                case_insensitive: true,
+              },
+            },
+          },
+          {
+            wildcard: {
+              'subject.keyword': {
+                value: `*${escapedWildcard}*`,
+                case_insensitive: true,
+              },
+            },
+          },
+        ],
+        minimum_should_match: 1,
       },
     });
   }
@@ -105,7 +148,9 @@ export async function searchEmails(opts: {
       from,
       size: pageSize,
       query: { bool: { must } },
-      sort: [{ scheduledAt: { order: 'desc' } }],
+      sort: trimmedQ
+        ? ['_score', { scheduledAt: { order: 'desc', missing: '_last' } }]
+        : [{ scheduledAt: { order: 'desc', missing: '_last' } }],
     });
 
     const items = result.hits.hits.map((h) => h._source!);
