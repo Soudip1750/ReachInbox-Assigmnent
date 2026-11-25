@@ -115,7 +115,7 @@ export function ComposeModal({ isOpen, onClose }: ComposeViewProps) {
     }
   };
 
-  const handleScheduleSubmit = async () => {
+  const handleScheduleSubmit = async (mode: 'now' | 'later' = 'now') => {
     const allEmails = [...emailsList];
     if (toInput.trim() && toInput.includes('@')) {
       allEmails.push(toInput.trim().toLowerCase());
@@ -132,9 +132,12 @@ export function ComposeModal({ isOpen, onClose }: ComposeViewProps) {
     }
 
     const start = new Date(scheduledTime);
-    const startTimeISO = start < new Date()
-      ? new Date(Date.now() + 1000).toISOString()
-      : start.toISOString();
+    const startTimeISO =
+      mode === 'now'
+        ? new Date().toISOString()
+        : start < new Date()
+          ? new Date(Date.now() + 1000).toISOString()
+          : start.toISOString();
 
     try {
       const res = await createCampaign.mutateAsync({
@@ -147,7 +150,17 @@ export function ComposeModal({ isOpen, onClose }: ComposeViewProps) {
         ...(attachments.length > 0 ? { attachments } : {}),
       });
 
-      toast.success(`✅ Campaign scheduled! ${res.total} emails queued.`);
+      toast.success(
+        mode === 'now'
+          ? `✅ Campaign started! ${res.total} emails queued.`
+          : `✅ Campaign scheduled! ${res.total} emails queued.`
+      );
+      setToInput('');
+      setEmailsList([]);
+      setSubject('');
+      setBody('');
+      setAttachments([]);
+      setScheduledTime(toLocalISOString(new Date(Date.now() + 60_000)));
       onClose();
     } catch (err) {
       toast.error(getApiErrorMessage(err));
@@ -278,7 +291,7 @@ export function ComposeModal({ isOpen, onClose }: ComposeViewProps) {
                     type="button"
                     onClick={() => {
                       setIsSendLaterOpen(false);
-                      handleScheduleSubmit();
+                      handleScheduleSubmit('later');
                     }}
                     className="px-4 py-1 text-xs font-semibold rounded-full border border-[#00a859] text-[#00a859] hover:bg-[#e8f5e9]"
                   >
@@ -474,11 +487,11 @@ export function ComposeModal({ isOpen, onClose }: ComposeViewProps) {
               </button>
               <button
                 type="button"
-                onClick={handleScheduleSubmit}
+                onClick={() => handleScheduleSubmit('now')}
                 disabled={createCampaign.isPending}
                 className="px-6 py-2 rounded-full bg-[#00a859] hover:bg-[#00924d] text-white text-sm font-semibold shadow-sm transition-all"
               >
-                {createCampaign.isPending ? 'Scheduling...' : 'Send Campaign'}
+                {createCampaign.isPending ? 'Sending...' : 'Send Campaign'}
               </button>
             </div>
           </div>

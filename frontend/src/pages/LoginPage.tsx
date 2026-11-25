@@ -3,10 +3,9 @@ import toast from 'react-hot-toast';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../api/hooks';
 import { adminApi, authApi, getApiErrorMessage } from '../api/client';
-import { Spinner } from '../components/ui/Spinner';
 
 export function LoginPage() {
-  const { data: user, isLoading } = useAuth();
+  const { data: user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -37,14 +36,6 @@ export function LoginPage() {
       toast.error(messages[error] ?? `Authentication failed: ${error}`);
     }
   }, [searchParams]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <Spinner size="lg" />
-      </div>
-    );
-  }
 
   const handleEmailLogin = (e: React.FormEvent) => {
     e.preventDefault();

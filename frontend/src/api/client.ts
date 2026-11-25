@@ -14,6 +14,7 @@ const BACKEND_URL = import.meta.env['VITE_BACKEND_URL'] ?? 'http://localhost:400
 export const apiClient = axios.create({
   baseURL: BACKEND_URL,
   withCredentials: true,
+  timeout: 15_000,
   headers: { 'Content-Type': 'application/json' },
 });
 
