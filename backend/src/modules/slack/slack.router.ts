@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import { env } from '../../config/env';
 import { prisma } from '../../db/prisma';
 import { requireAuth } from '../../middleware/auth';
@@ -8,16 +9,19 @@ import { logger } from '../../config/logger';
 
 export const slackRouter = Router();
 
+interface SlackStatePayload {
+  userId: string;
+  nonce: string;
+}
+
 // GET /auth/slack - Start Slack OAuth
 slackRouter.get('/slack', requireAuth, (req, res) => {
-  const state = crypto.randomBytes(16).toString('hex');
-
-  res.cookie('slack_oauth_state', state, {
-    httpOnly: true,
-    secure: env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 10 * 60 * 1000,
-  });
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const state = jwt.sign(
+    { userId: req.user!.userId, nonce } satisfies SlackStatePayload,
+    env.JWT_SECRET,
+    { expiresIn: '10m' }
+  );
 
   const params = new URLSearchParams({
     client_id: env.SLACK_CLIENT_ID,
@@ -31,18 +35,22 @@ slackRouter.get('/slack', requireAuth, (req, res) => {
 });
 
 // GET /auth/slack/callback
-slackRouter.get('/slack/callback', requireAuth, async (req, res) => {
+slackRouter.get('/slack/callback', async (req, res) => {
   const { code, state, error } = req.query as Record<string, string>;
-  const userId = req.user!.userId;
 
   if (error) {
     return res.redirect(`${env.FRONTEND_URL}/dashboard?slack_error=${encodeURIComponent(error)}`);
   }
 
-  const storedState = req.cookies?.['slack_oauth_state'] as string | undefined;
-  res.clearCookie('slack_oauth_state');
+  if (!state) {
+    return res.redirect(`${env.FRONTEND_URL}/dashboard?slack_error=invalid_state`);
+  }
 
-  if (!state || !storedState || state !== storedState) {
+  let userId: string;
+  try {
+    const payload = jwt.verify(state, env.JWT_SECRET) as SlackStatePayload;
+    userId = payload.userId;
+  } catch {
     return res.redirect(`${env.FRONTEND_URL}/dashboard?slack_error=invalid_state`);
   }
 
